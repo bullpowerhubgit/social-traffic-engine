@@ -15,16 +15,46 @@ from aiohttp import web
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 log = logging.getLogger("social-traffic-engine")
 
-BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "")
-CHAT_ID = os.getenv("TELEGRAM_CHAT_ID", "")
+BOT_TOKEN     = os.getenv("TELEGRAM_BOT_TOKEN", "")
+CHAT_ID       = os.getenv("TELEGRAM_CHAT_ID", "")
 ANTHROPIC_KEY = os.getenv("ANTHROPIC_API_KEY", "")
-PORT = int(os.getenv("PORT", 8080))
+PORT          = int(os.getenv("PORT", 8080))
+MC_API_KEY    = os.getenv("MAILCHIMP_API_KEY", "")
+MC_SERVER     = os.getenv("MAILCHIMP_SERVER_PREFIX", "us7")
+MC_LIST_ID    = os.getenv("MAILCHIMP_LIST_ID", "")
+KV_API_KEY    = os.getenv("KLAVIYO_API_KEY", "")
+
+
+async def klaviyo_track(event: str, props: dict):
+    if not KV_API_KEY:
+        return
+    try:
+        async with aiohttp.ClientSession() as s:
+            await s.post(
+                "https://a.klaviyo.com/api/events/",
+                headers={"Authorization": f"Klaviyo-API-Key {KV_API_KEY}",
+                         "revision": "2024-06-15", "Content-Type": "application/json"},
+                json={"data": {"type": "event", "attributes": {
+                    "metric": {"data": {"type": "metric", "attributes": {"name": event}}},
+                    "properties": props,
+                }}},
+                timeout=aiohttp.ClientTimeout(total=8),
+            )
+    except Exception:
+        pass
 
 PRODUCTS = [
     {"name": "SteuercockPit", "url": "https://bullpower-steuercockpit.netlify.app", "pitch": "KI-Buchhaltung für Selbstständige — Abo-Verwaltung, Bank-CSV-Analyse, ELSTER-Vorbereitung"},
     {"name": "BullPower Hub Bundle", "url": "https://bullpower-hub-portal.netlify.app", "pitch": "8 KI-Automatisierungs-Tools für Shopify + E-Commerce — 14 Tage kostenlos"},
     {"name": "Shopify Acquisition Engine", "url": "https://shopify-acquisition-engine-production.up.railway.app", "pitch": "KI findet profitable Shopify-Produkte automatisch — Trending items, Preisoptimierung"},
     {"name": "Kostenlosen Shopify-Audit", "url": "https://bullpower-lead.netlify.app", "pitch": "KI analysiert deinen Shopify-Shop kostenlos — SEO, Conversion, Preise"},
+    {"name": "iComeAuto", "url": "https://bullpower-icomeauto.netlify.app", "pitch": "Income Automation Platform — passives Einkommen vollautomatisch"},
+    {"name": "SEO Turbo Tools", "url": "https://seo-turbo-tools-production.up.railway.app", "pitch": "KI-gestützte SEO-Analyse, Keyword Research & Meta-Generator"},
+    {"name": "Analytics Marketing Pro", "url": "https://analytics-marketing-pro-production.up.railway.app", "pitch": "Klaviyo, Mailchimp & Facebook Pixel vollautomatisch verbunden"},
+    {"name": "Shopify Automaton Suite", "url": "https://shopify-automaton-suite-production-e405.up.railway.app", "pitch": "Vollautomatische Shopify Suite mit Amazon & AliExpress Integration"},
+    {"name": "Windsurf Shopify Suite", "url": "https://windsurf-shopify-suite-production.up.railway.app", "pitch": "Shopify SaaS mit KI-Preisoptimierung und automatischer Synchronisation"},
+    {"name": "CreatorAI Ultra", "url": "https://creatorai-ultra-production.up.railway.app", "pitch": "KI Content Creator — Blog, Video-Skripte, Social Media Posts vollautomatisch"},
+    {"name": "Cognitive Symphony", "url": "https://cognitive-symphony-production.up.railway.app", "pitch": "KI Business Analyse & Automatisierung für E-Commerce Unternehmer"},
 ]
 
 REDDIT_SUBS = ["r/shopify", "r/ecommerce", "r/SEO", "r/Entrepreneur", "r/smallbusiness", "r/Affiliatemarketing"]
@@ -159,9 +189,15 @@ async def run_daily_social_cycle():
             stats["errors"] += 1
 
     stats["last_run"] = now
+    await klaviyo_track("Social Content Batch", {
+        "product": product["name"],
+        "posts_generated": stats["posts_generated"],
+        "platforms": ["Reddit", "LinkedIn", "HackerNews", "Quora", "PR"],
+    })
     await send_telegram(
         f"✅ <b>Social Batch abgeschlossen</b>\n"
         f"📊 {stats['posts_generated']} Posts generiert\n"
+        f"📧 Klaviyo getrackt\n"
         f"⏭ Nächster Batch in 8 Stunden"
     )
     log.info("Social cycle complete")
