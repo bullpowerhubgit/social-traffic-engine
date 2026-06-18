@@ -55,6 +55,18 @@ PRODUCTS = [
     {"name": "Windsurf Shopify Suite", "url": "https://windsurf-shopify-suite-production.up.railway.app", "pitch": "Shopify SaaS mit KI-Preisoptimierung und automatischer Synchronisation"},
     {"name": "CreatorAI Ultra", "url": "https://creatorai-ultra-production.up.railway.app", "pitch": "KI Content Creator — Blog, Video-Skripte, Social Media Posts vollautomatisch"},
     {"name": "Cognitive Symphony", "url": "https://cognitive-symphony-production.up.railway.app", "pitch": "KI Business Analyse & Automatisierung für E-Commerce Unternehmer"},
+    {"name": "Amazon Top-Deals (Affiliate)", "url": "https://www.amazon.de/s?k=Shopify+Automatisierung+Tools&tag=bullpowerhub-21", "pitch": "Top Amazon-Produkte für E-Commerce Automatisierung — Affiliate-Link mit bullpowerhub-21"},
+    {"name": "Amazon Gadgets & KI-Tools", "url": "https://www.amazon.de/s?k=KI+Tools+Automatisierung&tag=bullpowerhub-21", "pitch": "KI-Hardware und Gadgets für digitale Unternehmer auf Amazon.de — bullpowerhub-21"},
+]
+
+SITEMAPS = [
+    "https://shopify-automaton-suite-production-e405.up.railway.app/sitemap.xml",
+    "https://seo-turbo-tools-production.up.railway.app/sitemap.xml",
+    "https://analytics-marketing-pro-production.up.railway.app/sitemap.xml",
+    "https://shopify-acquisition-engine-production.up.railway.app/sitemap.xml",
+    "https://bullpower-steuercockpit.netlify.app/sitemap.xml",
+    "https://bullpower-hub-portal.netlify.app/sitemap.xml",
+    "https://bullpower-lead.netlify.app/sitemap.xml",
 ]
 
 REDDIT_SUBS = ["r/shopify", "r/ecommerce", "r/SEO", "r/Entrepreneur", "r/smallbusiness", "r/Affiliatemarketing"]
@@ -97,6 +109,24 @@ async def send_telegram(text: str):
             json={"chat_id": CHAT_ID, "text": text, "parse_mode": "HTML", "disable_web_page_preview": True},
             timeout=aiohttp.ClientTimeout(total=15),
         )
+
+
+async def ping_sitemaps():
+    """Ping Google + Bing with all project sitemaps for faster indexing."""
+    pinged = 0
+    async with aiohttp.ClientSession() as sess:
+        for sitemap_url in SITEMAPS:
+            for engine, endpoint in [
+                ("Google", f"https://www.google.com/ping?sitemap={sitemap_url}"),
+                ("Bing",   f"https://www.bing.com/ping?sitemap={sitemap_url}"),
+            ]:
+                try:
+                    await sess.get(endpoint, timeout=aiohttp.ClientTimeout(total=8))
+                    pinged += 1
+                except Exception:
+                    pass
+    log.info(f"Sitemap ping: {pinged}/{len(SITEMAPS)*2} OK")
+    return pinged
 
 
 async def generate_reddit_post(product: dict) -> str:
@@ -188,6 +218,9 @@ async def run_daily_social_cycle():
             log.error(f"{platform} generation failed: {e}")
             stats["errors"] += 1
 
+    # Ping sitemaps for SEO indexing boost
+    pinged = await ping_sitemaps()
+
     stats["last_run"] = now
     await klaviyo_track("Social Content Batch", {
         "product": product["name"],
@@ -197,6 +230,7 @@ async def run_daily_social_cycle():
     await send_telegram(
         f"✅ <b>Social Batch abgeschlossen</b>\n"
         f"📊 {stats['posts_generated']} Posts generiert\n"
+        f"🔍 Sitemaps gepingt: {pinged}/{len(SITEMAPS)*2} (Google + Bing)\n"
         f"📧 Klaviyo getrackt\n"
         f"⏭ Nächster Batch in 8 Stunden"
     )
