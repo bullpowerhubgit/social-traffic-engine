@@ -757,20 +757,27 @@ async def handle_health(request: web.Request) -> web.Response:
 
 
 async def handle_stats(request: web.Request) -> web.Response:
-    async with aiosqlite.connect(DB_PATH) as db:
-        cursor = await db.execute("SELECT COUNT(*) FROM posts_sent")
-        total = (await cursor.fetchone())[0]
-        cursor = await db.execute(
-            "SELECT COUNT(*) FROM posts_sent WHERE posted_at >= date('now')"
-        )
-        today = (await cursor.fetchone())[0]
-        cursor = await db.execute(
-            "SELECT platform, COUNT(*) FROM posts_sent GROUP BY platform"
-        )
-        by_platform = {r[0]: r[1] for r in await cursor.fetchall()}
-        cursor = await db.execute("SELECT COUNT(*) FROM keyword_queue")
-        kw_count = (await cursor.fetchone())[0]
+    try:
+        async with aiosqlite.connect(DB_PATH) as db:
+            cursor = await db.execute("SELECT COUNT(*) FROM posts_sent")
+            total = (await cursor.fetchone())[0]
+            cursor = await db.execute(
+                "SELECT COUNT(*) FROM posts_sent WHERE posted_at >= date('now')"
+            )
+            today = (await cursor.fetchone())[0]
+            cursor = await db.execute(
+                "SELECT platform, COUNT(*) FROM posts_sent GROUP BY platform"
+            )
+            by_platform = {r[0]: r[1] for r in await cursor.fetchall()}
+            cursor = await db.execute("SELECT COUNT(*) FROM keyword_queue")
+            kw_count = (await cursor.fetchone())[0]
+    except Exception as exc:
+        log.warning(f"[STATS] DB error: {exc}")
+        total = today = kw_count = 0
+        by_platform = {}
     return web.json_response({
+        "service": "social-traffic-engine",
+        "version": "2.0-TURBO",
         "total_posts": total,
         "posts_today": today,
         "by_platform": by_platform,
@@ -779,6 +786,7 @@ async def handle_stats(request: web.Request) -> web.Response:
         "keyword_queue_size": kw_count,
         "last_run": _stats["last_run"],
         "errors": _stats["errors"],
+        "trending_topics": _stats.get("trending_topics", []),
     })
 
 
